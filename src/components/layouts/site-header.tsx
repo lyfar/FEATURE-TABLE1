@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation";
 
 import { siteConfig } from "@/config/site";
 import { ThemeToggle } from "@/components/layouts/theme-toggle";
-import { UserNav } from "@/components/user-nav";
-import { Icons } from "@/components/icons";
 import { buttonVariants } from "@/components/ui/button";
 import { MainNav } from "@/components/layouts/main-nav";
 
@@ -17,23 +15,7 @@ export function SiteHeader() {
         <MainNav items={siteConfig.mainNav} />
         <div className="flex flex-1 items-center justify-end space-x-4">
           <nav className="flex items-center space-x-3">
-            <Link
-              href={siteConfig.links.github}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <div
-                className={buttonVariants({
-                  size: "icon",
-                  variant: "ghost",
-                })}
-              >
-                <Icons.gitHub className="h-5 w-5" />
-                <span className="sr-only">GitHub</span>
-              </div>
-            </Link>
             <ThemeToggle />
-            <UserNav />
           </nav>
         </div>
       </div>

@@ -3,12 +3,7 @@
 // * * This is just a demostration of edit modal, actual functionality may vary
 
 import { z } from "zod";
-import {
-  TaskType,
-  labels,
-  priorities,
-  statuses,
-} from "@/lib/validations/schema";
+import { FeatureData } from "@/app/page";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -40,54 +35,136 @@ import {
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
+import { Textarea } from "@/components/ui/textarea";
+import * as React from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { FilterOption } from "../data-table/data-table-faceted-filter";
+import { DialogFooter } from "@/components/ui/dialog";
+import { useRouter } from 'next/navigation';
+import { toast } from "sonner";
 
 type EditProps = {
-  task: TaskType;
+  feature: FeatureData;
+  statusOptions: FilterOption[];
+  teamOptions: FilterOption[];
+  priorityOptions: FilterOption[];
+  featureTypeOptions: FilterOption[];
+  businessValueOptions: FilterOption[];
+  onClose: () => void;
 };
 
-const editSchema = z.object({
-  id: z.string(),
-  title: z.string().min(1, { message: "Title Required" }),
-  status: z.enum(statuses),
-  label: z.enum(labels),
-  priority: z.enum(priorities),
-  due_date: z.date({
-    required_error: "Due date is required.",
-  }),
+const editFeatureSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1, { message: "Feature Name Required" }),
+  description: z.string().optional(),
+  status_id: z.string().uuid().optional().nullable(),
+  team_id: z.string().uuid().optional().nullable(),
+  moscow_priority_id: z.string().uuid().optional().nullable(),
+  feature_type_id: z.string().uuid().optional().nullable(),
+  business_value_id: z.string().uuid().optional().nullable(),
 });
 
-type editSchemaType = z.infer<typeof editSchema>;
+type EditFeatureSchemaType = z.infer<typeof editFeatureSchema>;
 
-export default function EditDialog({ task }: EditProps) {
-  const form = useForm<editSchemaType>({
-    resolver: zodResolver(editSchema),
+export default function EditDialog({
+  feature,
+  statusOptions,
+  teamOptions,
+  priorityOptions,
+  featureTypeOptions,
+  businessValueOptions,
+  onClose,
+}: EditProps) {
+  const router = useRouter();
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const form = useForm<EditFeatureSchemaType>({
+    resolver: zodResolver(editFeatureSchema),
     defaultValues: {
-      id: task.id,
-      title: task.title,
-      status: task.status,
-      label: task.label,
-      priority: task.priority,
-      due_date: task.due_date,
+      id: feature.id,
+      name: feature.name,
+      description: feature.description ?? "",
+      status_id: feature.feature_attributes?.status_id ?? undefined,
+      team_id: feature.feature_attributes?.team_id ?? undefined,
+      moscow_priority_id: feature.feature_attributes?.moscow_priority_id ?? undefined,
+      feature_type_id: feature.feature_attributes?.feature_type_id ?? undefined,
+      business_value_id: feature.feature_attributes?.business_value_id ?? undefined,
     },
   });
 
-  function onSubmit(values: editSchemaType) {
-    console.log(values);
+  async function onSubmit(values: EditFeatureSchemaType) {
+    setIsSaving(true);
+    let success = false;
+    try {
+      console.log("Submitting edit:", values);
+      const { error: featureError } = await supabase
+        .from('features')
+        .update({ name: values.name, description: values.description })
+        .eq('id', values.id);
+
+      if (featureError) {
+        console.error("Error updating feature:", featureError);
+        toast.error("Failed to update feature.");
+        return;
+      }
+
+      const attributesExist = !!feature.feature_attributes?.id;
+      const attributeData = {
+        feature_id: values.id,
+        status_id: values.status_id,
+        team_id: values.team_id,
+        moscow_priority_id: values.moscow_priority_id,
+        feature_type_id: values.feature_type_id,
+        business_value_id: values.business_value_id,
+      };
+
+      let attributeResult;
+      if (attributesExist) {
+        attributeResult = await supabase
+          .from('feature_attributes')
+          .update(attributeData)
+          .eq('feature_id', values.id);
+      } else {
+        attributeResult = await supabase
+          .from('feature_attributes')
+          .insert(attributeData);
+      }
+
+      if (attributeResult.error) {
+        console.error("Error saving feature attributes:", attributeResult.error);
+        toast.error("Failed to save feature attributes.");
+        return;
+      }
+
+      toast.success("Feature updated successfully!");
+      success = true;
+      router.refresh();
+      if (success) {
+          onClose();
+      }
+
+    } catch (error) {
+        console.error("An unexpected error occurred during Supabase update:", error);
+        toast.error("An unexpected error occurred during the database update.");
+    } finally {
+        setIsSaving(false);
+    }
   }
+
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Edit Task Details</DialogTitle>
+        <DialogTitle>Edit Feature Details</DialogTitle>
       </DialogHeader>
-      <div className='py-4'>
+      <div className='py-4 max-h-[70vh] overflow-y-auto pr-4'>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className='grid gap-4'>
+          <form id="edit-feature-form" onSubmit={form.handleSubmit(onSubmit)} className='grid gap-4'>
             <FormField
               control={form.control}
-              name='title'
+              name='name'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Title</FormLabel>
+                  <FormLabel>Feature Name</FormLabel>
                   <FormControl>
                     <Input type='text' {...field} />
                   </FormControl>
@@ -97,27 +174,34 @@ export default function EditDialog({ task }: EditProps) {
             />
             <FormField
               control={form.control}
-              name='status'
+              name='description'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Feature description..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='status_id'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Status</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
+                  <Select onValueChange={field.onChange} value={field.value ?? undefined}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder='Select a Status to Update' />
+                        <SelectValue placeholder='Select Status' />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectGroup>
-                        {status_options.map((status, index) => (
-                          <SelectItem key={index} value={status.value}>
-                            <span className='flex items-center'>
-                              <status.icon className='mr-2 h-5 w-5 text-muted-foreground' />
-                              {status.label}
-                            </span>
+                        {statusOptions.map((status) => (
+                          <SelectItem key={status.value} value={status.value}>
+                            {status.label}
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -129,27 +213,21 @@ export default function EditDialog({ task }: EditProps) {
             />
             <FormField
               control={form.control}
-              name='label'
+              name='team_id'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Label</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
+                  <FormLabel>Team</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? undefined}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder='Select a Label to Update' />
+                        <SelectValue placeholder='Select Team' />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectGroup>
-                        {label_options.map((label, index) => (
-                          <SelectItem key={index} value={label.value}>
-                            <span className='flex items-center'>
-                              <label.icon className='mr-2 h-5 w-5 text-muted-foreground' />
-                              {label.label}
-                            </span>
+                        {teamOptions.map((team) => (
+                          <SelectItem key={team.value} value={team.value}>
+                            {team.label}
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -161,27 +239,21 @@ export default function EditDialog({ task }: EditProps) {
             />
             <FormField
               control={form.control}
-              name='priority'
+              name='moscow_priority_id'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Priority</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
+                  <FormLabel>MoSCoW Priority</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? undefined}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder='Select a Priority to Update' />
+                        <SelectValue placeholder='Select Priority' />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectGroup>
-                        {priority_options.map((priority, index) => (
-                          <SelectItem key={index} value={priority.value}>
-                            <span className='flex items-center'>
-                              <priority.icon className='mr-2 h-5 w-5 text-muted-foreground' />
-                              {priority.label}
-                            </span>
+                        {priorityOptions.map((prio) => (
+                          <SelectItem key={prio.value} value={prio.value}>
+                            {prio.label}
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -193,51 +265,67 @@ export default function EditDialog({ task }: EditProps) {
             />
             <FormField
               control={form.control}
-              name='due_date'
+              name='feature_type_id'
               render={({ field }) => (
-                <FormItem className='flex flex-col'>
-                  <FormLabel>Due Date</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "PPP")
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
-                          <CalendarIcon className='ml-auto h-4 w-4 opacity-50' />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className='w-auto p-0' align='end'>
-                      <Calendar
-                        mode='single'
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
-                        }
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                <FormItem>
+                  <FormLabel>Feature Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? undefined}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder='Select Type' />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectGroup>
+                        {featureTypeOptions.map((ftype) => (
+                          <SelectItem key={ftype.value} value={ftype.value}>
+                            {ftype.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type='submit' className='mt-2 w-full'>
-              Update Details
-            </Button>
+            <FormField
+              control={form.control}
+              name='business_value_id'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Business Value</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? undefined}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder='Select Value' />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectGroup>
+                        {businessValueOptions.map((bval) => (
+                          <SelectItem key={bval.value} value={bval.value}>
+                            {bval.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </form>
         </Form>
       </div>
+      <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button type="submit" form="edit-feature-form" disabled={isSaving}>
+             {isSaving ? "Saving..." : "Save and Close"}
+          </Button>
+      </DialogFooter>
     </>
   );
 }

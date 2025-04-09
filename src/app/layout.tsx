@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { SiteHeader } from "@/components/layouts/site-header"
 import { TailwindIndicator } from "@/components/tailwind-indicator"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "sonner"
 
 import "@/styles/globals.css"
 
@@ -35,6 +36,7 @@ export default function RootLayout({
             <main className="flex-1">{children}</main>
           </div>
           <TailwindIndicator />
+          <Toaster position="bottom-right" />
         </ThemeProvider>
       </body>
     </html>

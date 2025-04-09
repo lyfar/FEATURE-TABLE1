@@ -27,15 +27,26 @@ import {
 
 import { DataTableToolbar } from "./data-table-toolbar"
 import { DataTablePagination } from "./data-table-pagination"
+import { FilterOption } from "./data-table-faceted-filter"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  statusOptions: FilterOption[]
+  priorityOptions: FilterOption[]
+  teamOptions: FilterOption[]
+  featureTypeOptions: FilterOption[]
+  businessValueOptions: FilterOption[]
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  statusOptions,
+  priorityOptions,
+  teamOptions,
+  featureTypeOptions,
+  businessValueOptions,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -64,11 +75,25 @@ export function DataTable<TData, TValue>({
     getSortedRowModel: getSortedRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    meta: {
+      statusOptions,
+      priorityOptions,
+      teamOptions,
+      featureTypeOptions,
+      businessValueOptions,
+    },
   })
 
   return (
     <div className="space-y-4">
-      <DataTableToolbar table={table} />
+      <DataTableToolbar
+        table={table}
+        statusOptions={statusOptions}
+        priorityOptions={priorityOptions}
+        teamOptions={teamOptions}
+        featureTypeOptions={featureTypeOptions}
+        businessValueOptions={businessValueOptions}
+      />
       <div className="rounded-md border">
         <Table>
           <TableHeader>
